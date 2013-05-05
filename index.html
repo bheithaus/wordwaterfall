@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>three.js canvas - interactive particles</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		
+		<script src="js/three.min.js"></script>
+		<script src="js/helvetiker_regular.typeface.js"></script>
+		<script src="js/TrackballControls.js"></script>
+		<script src="js/stats.min.js"></script>
+		<script src="js/ammo.fast.js"></script>
+		
+		<style>
+			body {
+				font-family: Monospace;
+				background-color: #f0f0f0;
+				margin: 0px;
+				overflow: hidden;
+			}
+		</style>
+	</head>
+	<body>
+
+
+		<script>
+			var alphabet = "abcdsssefghijaooooaaklmnoiiiipqeeerstuaavwuuuuxyz".split("");
+			var colors = [0x1B91E0, 0x1B87E0, 0x1573BF, 0x125B96, 0x1A4B73, 0x0E3A5E, 0x0D4675, 0x496E8C, 0x5E88AB, 0x5E95AB];
+		
+			var SEPARATION = 100;
+			var AMOUNTX = 20;
+			var AMOUNTY = 20;
+
+			var maxLetters = 50;
+
+			var container;
+			var controls;
+			var camera, scene, projector, renderer;
+			var cameraCube, sceneCube;
+			
+			var clock = new THREE.Clock();
+			
+			var text, particle, parent, now, lastLetter = 0, letters = [], spikes = [];
+			
+			var text3d, textMaterial, theText, coords, sound;
+				
+			var PI2 = Math.PI * 2;
+			
+			var programFill = function ( context ) {
+
+				context.beginPath();
+				context.arc( 0, 0, 1, 0, PI2, true );
+				context.closePath();
+				context.fill();
+			}
+
+			var programStroke = function ( context ) {
+
+				context.lineWidth = 0.05;
+				context.beginPath();
+				context.arc( 0, 0, 1, 0, PI2, true );
+				context.closePath();
+				context.stroke();
+			};
+			
+			var randomColor = function () {
+				return colors[Math.floor(Math.random()*colors.length)];
+			};
+
+			init();
+			animate();
+			
+			function init() {								
+				container = document.createElement( 'div' );
+				document.body.appendChild( container );
+
+				camera = new THREE.PerspectiveCamera( 70, window.innerWidth / window.innerHeight, 1, 10000 );
+				camera.position.set(0, 0, 3200 );
+				
+				scene = new THREE.Scene();
+				scene.fog = new THREE.FogExp2( 0xefd1b5, 1000000 );
+				
+				controls = new THREE.TrackballControls( camera );
+
+				controls.rotateSpeed = 0.2;
+				controls.zoomSpeed = 1;
+				controls.panSpeed = 0.8;
+
+				controls.noZoom = false;
+				controls.noPan = false;
+
+				controls.staticMoving = true;
+				controls.dynamicDampingFactor = 0.3;
+
+				controls.keys = [ 65, 83, 68 ];
+				
+				//add funky spikes
+				createSpikes();
+				
+				// setup physics
+				var collisionConfiguration = new Ammo.btDefaultCollisionConfiguration();
+				var dispatcher = new Ammo.btCollisionDispatcher( collisionConfiguration );
+				var overlappingPairCache = new Ammo.btDbvtBroadphase();
+				var solver = new Ammo.btSequentialImpulseConstraintSolver();
+				scene.world = new Ammo.btDiscreteDynamicsWorld( dispatcher, overlappingPairCache, solver, collisionConfiguration );
+				scene.world.setGravity(new Ammo.btVector3(50, -20, 30));
+
+				// lights
+				
+				light = new THREE.DirectionalLight( 0xffffff );
+				light.position.set( 1, 1, 200 );
+				scene.add( light );
+				
+				light = new THREE.DirectionalLight( 0x002288 );
+				light.position.set( -1, -1, -200 );
+				scene.add( light );
+				
+				// light = new THREE.AmbientLight( 0x222222 );
+				scene.add( light );
+				
+				//renderer
+				renderer = new THREE.CanvasRenderer();
+				renderer.setSize( window.innerWidth, window.innerHeight );
+
+				container.appendChild( renderer.domElement );
+
+				stats = new Stats();
+				stats.domElement.style.position = 'absolute';
+				stats.domElement.style.top = '0px';
+				container.appendChild( stats.domElement );
+	
+				window.addEventListener( 'resize', onWindowResize, false );
+			}
+
+			function onWindowResize() {
+
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+
+				renderer.setSize( window.innerWidth, window.innerHeight );
+
+				controls.handleResize();
+
+			}
+			
+			var spikeIterator, time;
+			
+			function updateSpikes() {
+				var i;
+				time = clock.getElapsedTime() * 5;
+				
+				if (spikeIterator == spikes.length || !spikeIterator) { spikeIterator = 0;}
+				
+				spikes[spikeIterator].material.color.setHSL( 0.8, 0.8 + 0.7 * ( 1 + 2 * Math.sin( time ) ) / 2, 0.1 );
+				
+				spikeIterator++;
+			}
+			
+			function createSpikes() {
+				for ( var ix = 0; ix < AMOUNTX; ix++ ) {
+
+					for ( var iy = 0; iy < AMOUNTY; iy++ ) {
+
+						var material = new THREE.ParticleBasicMaterial( { color: 0x00000F });
+
+						particle = new THREE.Particle( material );
+						particle.scale.y = 1;
+						particle.position.x = ix * SEPARATION - ( ( AMOUNTX * SEPARATION ) / 2 );
+						particle.position.z = iy * SEPARATION - ( ( AMOUNTY * SEPARATION ) / 2 );
+						spikes.push(particle);
+						scene.add( particle );
+					}
+				}
+			}
+			
+			function Sound( sources, radius, volume ) {
+				var audio = document.createElement( 'audio' );
+
+				for ( var i = 0; i < sources.length; i ++ ) {
+					var source = document.createElement( 'source' );
+					source.src = sources[ i ];
+
+					audio.appendChild( source );
+				}
+
+				this.position = new THREE.Vector3();
+
+				this.play = function () {
+					audio.play();
+				}
+
+				this.update = function ( camera ) {
+					var distance = this.position.distanceTo( camera.position );
+
+					if ( distance <= radius ) {
+						audio.volume = volume * ( 1 - 0.5 * distance / radius );
+					} else {
+						audio.volume = 0;
+					}
+				}
+			}
+			
+			function createLetter() {			
+					theText = alphabet[Math.floor(Math.random() * alphabet.length)];
+					text3d = new THREE.TextGeometry( theText, {
+						size: 10,
+						height: 1,
+						curveSegments: 2,
+						font: "helvetiker"
+					});
+
+					textMaterial = new THREE.MeshBasicMaterial( { color: randomColor(), shading: THREE.FlatShading, overdraw: true } );
+					var text = new THREE.Mesh( text3d, textMaterial );
+
+					text.position.x = Math.random() * 40 - 100;
+					text.position.y = Math.random() * 3 + 30;
+					text.position.z = Math.random() * 20;
+
+					text.rotation.x = Math.random() * 3;
+					text.rotation.y = Math.PI * 2;
+					
+					parent = new THREE.Object3D();
+					parent.add( text );
+			
+					scene.add( text );
+										
+					// Create 3D box model
+					var mass, startTransform, localInertia, boxShape, motionState, rbInfo, boxAmmo;
+					
+					mass = 3 * 3 * 3;
+					startTransform = new Ammo.btTransform();
+					startTransform.setIdentity();
+					startTransform.setOrigin(new Ammo.btVector3( text.position.x, 20, text.position.y ));
+
+					localInertia = new Ammo.btVector3(0, 0, 0);
+
+					boxShape = new Ammo.btBoxShape(new Ammo.btVector3( 1.5, 1.5, 1.5 ));
+					boxShape.calculateLocalInertia( mass, localInertia );
+
+					motionState = new Ammo.btDefaultMotionState( startTransform );
+					rbInfo = new Ammo.btRigidBodyConstructionInfo( mass, motionState, boxShape, localInertia );
+					boxAmmo = new Ammo.btRigidBody( rbInfo );
+					scene.world.addRigidBody( boxAmmo );
+
+					boxAmmo.mesh = text;
+					
+					// create and attach sound;
+					if (Math.random()*5 < 3) {
+						sound = null;
+					} else {
+						sound = new Sound( [ 'raindrops.mp3' ], 400, 0.3 );
+						sound.position.copy( text.position );
+						sound.play();
+					}
+						
+					return { letter: boxAmmo, sound: sound };
+			}
+				
+			function updateLetters() {
+				scene.world.stepSimulation( 1 / 60, 5 );
+				var i, transform = new Ammo.btTransform(), origin, rotation;
+
+				now = new Date().getTime();
+
+				if ((now - lastLetter > 500) && (letters.length < maxLetters)) {
+					letters.push(createLetter());
+					lastLetter = now;
+				}
+		
+				for ( i = 0; i < letters.length; i++ ) {
+					//update sounds			
+					if (letters[i].sound) {
+						letters[i].sound.update( camera );	
+					}
+						
+					//update position
+					letters[i].letter.getMotionState().getWorldTransform( transform );
+			
+					origin = transform.getOrigin();
+
+				
+					if (origin.y() < - 800) {
+						//delete and create new letter
+						console.log(letters.length)
+						scene.remove( letters[i].letter.mesh);
+						letters[i] = createLetter();
+					} else {
+						//update position
+					
+						letters[i].letter.mesh.position.x = origin.x();
+						letters[i].letter.mesh.position.y = origin.y();
+						letters[i].letter.mesh.position.z = origin.z();
+			
+						rotation = transform.getRotation();
+						letters[i].letter.mesh.quaternion.x = rotation.x();
+						letters[i].letter.mesh.quaternion.y = rotation.y();
+						letters[i].letter.mesh.quaternion.z = rotation.z();
+						letters[i].letter.mesh.quaternion.w = rotation.w();
+					}
+				};
+			}
+			
+			function animate() {
+				requestAnimationFrame( animate );
+				
+				controls.update();
+				stats.update();
+				
+				updateLetters();
+				updateSpikes();
+
+				render();
+			}
+
+			var radius = 100;
+			var theta = 0;
+
+			function render() {
+
+				theta += .2;
+				
+				camera.position.x = radius * Math.sin( THREE.Math.degToRad( theta ) );
+				camera.position.y = radius * Math.sin( THREE.Math.degToRad( theta ) );
+				camera.position.z = radius * Math.cos( THREE.Math.degToRad( theta ) );
+				camera.lookAt( scene.position );
+			
+				renderer.render( scene, camera );
+			}
+		</script>
+
+	</body>
+</html>
