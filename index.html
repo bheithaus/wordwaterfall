@@ -43,16 +43,19 @@
 		$(function () {
 			var ALPHABET = ("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ").split("");
 			
-				var phrase = Base64.decode(window.location.hash) || shuffle(ALPHABET);
+				var poem = Base64.decode(window.location.hash) || shuffle(ALPHABET);
 				
 				window.onhashchange = function (e) {
-					phrase = Base64.decode(window.location.hash);
+					console.log("WTF!!")
+					poem = Base64.decode(window.location.hash);
 					removeAndReset(letters);
-					maxLetters = phrase.length * 2;
+					maxLetters = poem.length * 2;
 				};
 				
 				$(window).on('keypress', function(event) {
+					console.log(event.keyCode);
 					if ($(event.target).data("id") == "input" && event.keyCode == 13) {
+						console.log("LOCATION CHANGE!!!!!")
 						var poem = $(event.target).val();
 						window.location="#" + Base64.encode(poem);
 					}
@@ -65,7 +68,7 @@
 				var AMOUNTY = 20;
 				
 				var letterIndex = 0;
-				var maxLetters = phrase.length * 2;
+				var maxLetters = poem.length * 2;
 
 				var container;
 				var controls;
@@ -242,14 +245,14 @@
 				}
 			
 				function createLetter() {
-						theText = phrase[letterIndex];
+						theText = poem[letterIndex];
 						//console.log(theText);
-						//console.log(phrase);
+						//console.log(poem);
 						if (ALPHABET.indexOf(theText) == -1) {
 							//console.log('hit a space');
 							lastLetter = lastLetter + 500;
 							
-							letterIndex = letterIndex == phrase.length - 1 ? 0 : letterIndex + 1;
+							letterIndex = letterIndex == poem.length - 1 ? 0 : letterIndex + 1;
 							return null;
 						}
 						
@@ -304,7 +307,7 @@
 						//console.log(boxAmmo);
 						lastLetter = now;
 						
-						if ( letterIndex == phrase.length - 1) {
+						if ( letterIndex == poem.length - 1) {
 							//console.log("lastletter time");
 							//console.log(lastLetter);
 							console.log(letters.length);
